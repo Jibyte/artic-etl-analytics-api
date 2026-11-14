@@ -103,7 +103,7 @@ La documentación interactiva Swagger UI estará disponible en `http://127.0.0.1
 
 ### Pipeline ETL
 
-#### `POST /api/v1/etl/extraer`
+#### `POST /api/v1/etl/extraer` *(Implementado por: Alexander)*
 Extrae obras de arte desde la API del Art Institute of Chicago con paginación dinámica y las almacena de forma idempotente en MongoDB (`artic_staging.artworks_raw`) usando el `id` entero de la obra como `_id`.
 
 * **Request Body (`application/json`):**
@@ -127,7 +127,15 @@ Extrae obras de arte desde la API del Art Institute of Chicago con paginación d
 
 ### Analítica y Auditoría Dual
 
-*(Sección reservada para documentar `GET /api/v1/analitica/columna/{nombre}` y `GET /api/v1/analitica/perfil/{id}` — Integrante 3).*
+*(Sección reservada para documentar `GET /api/v1/analitica/columna/{nombre}` — Integrante 3).*
+
+#### `GET /api/v1/analitica/perfil/{id}` *(Implementado por: Alexander)*
+Consulta simultáneamente una obra de arte por su identificador entero tanto en MongoDB (`_id`) como en MySQL (`id`) para auditar la sincronización 1:1 del pipeline ETL.
+
+* **Escenarios de respuesta:**
+  * **Existe en ambas bases (`200 OK`):** Retorna `id`, `vista_mongo`, `vista_sql` y `"warning": null`.
+  * **Existe solo en una base (`200 OK`):** Retorna la vista disponible, la faltante en `null` y un mensaje descriptivo en `warning`.
+  * **No existe en ninguna base (`404 Not Found`):** Retorna detalle de registro no encontrado.
 
 ---
 
@@ -135,6 +143,6 @@ Extrae obras de arte desde la API del Art Institute of Chicago con paginación d
 
 | Integrante | Rol y Módulo | Ramas Trabajadas | Entregables Principales |
 | :--- | :--- | :--- | :--- |
-| **Alexander** | **Infraestructura Base, Modelado SQL y Extracción (Fase E)** | `feature/core-setup`<br>`feature/etl-extract` | Configuración `.env`, conexiones duales MongoDB/MySQL, modelo `ArtworkMaster` (11 columnas), esquemas Pydantic, `main.py` y endpoint idempotente `POST /api/v1/etl/extraer`. |
+| **Alexander** | **Infraestructura Base, Modelado SQL, Extracción (E) y Perfil Dual** | `feature/core-setup`<br>`feature/etl-extract`<br>`feature/analitica-perfil-dual` | Configuración `.env`, conexiones duales MongoDB/MySQL, modelo `ArtworkMaster` (11 columnas), esquemas Pydantic, `main.py`, extracción idempotente `POST /api/v1/etl/extraer` y auditoría cruzada `GET /api/v1/analitica/perfil/{id}`. |
 | **Integrante 2** | **Transformación Pandas, Carga DW (TL) y Reset** | *Por registrar* | Limpieza y aplanamiento con Pandas, carga idempotente en MySQL (`POST /api/v1/etl/transformar`) y vaciado controlado (`DELETE /api/v1/etl/reset`). |
-| **Integrante 3** | **Analítica Dinámica y Perfil Dual** | *Por registrar* | Perfilado estadístico dinámico por tipo de columna (`GET /api/v1/analitica/columna/{nombre}`) y auditoría cruzada Mongo/SQL (`GET /api/v1/analitica/perfil/{id}`). |
+| **Integrante 3** | **Analítica Estadística Dinámica** | *Por registrar* | Perfilado estadístico dinámico por tipo de columna (`GET /api/v1/analitica/columna/{nombre}`) sin hardcodear nombres de columnas. |

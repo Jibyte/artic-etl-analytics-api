@@ -63,9 +63,9 @@ Para cumplir con las reglas de ingeniería colaborativa del proyecto, **no se pe
 
 ---
 
-### Alexander: Núcleo de Infraestructura, Modelado de Datos y Extracción (Fase E)
+### Alexander: Núcleo de Infraestructura, Modelado SQL, Extracción (Fase E) y Perfil Dual
 
-* **Ramas sugeridas:** `feature/core-setup`, `feature/models-schemas`, `feature/etl-extract`
+* **Ramas sugeridas:** `feature/core-setup`, `feature/models-schemas`, `feature/etl-extract`, `feature/analitica-perfil-dual`
 * **Archivos asignados:**
   * `requirements.txt`, `.env.example`
   * `app/config.py`
@@ -75,6 +75,8 @@ Para cumplir con las reglas de ingeniería colaborativa del proyecto, **no se pe
   * `app/views/schemas.py`
   * `app/services/etl_service.py` (función de extracción)
   * `app/controllers/etl_controller.py` (endpoint `POST /api/v1/etl/extraer`)
+  * `app/services/analitica_service.py`
+  * `app/controllers/analitica_controller.py`
 
 #### Tareas Técnicas Específicas:
 1. **Configuración y Conexiones (`config.py`, `database.py`, `main.py`):**
@@ -90,6 +92,10 @@ Para cumplir con las reglas de ingeniería colaborativa del proyecto, **no se pe
    * Consumir `https://api.artic.edu/api/v1/artworks` manejando paginación (`page` y `limit`) hasta completar la `cantidad` solicitada.
    * Asignar el `id` entero de cada obra como `_id` en MongoDB (prohibido el `ObjectId` autogenerado).
    * Garantizar **idempotencia** mediante verificación previa o `upsert`, retornando HTTP `201` con el conteo exacto de documentos `nuevos` y `ya_existentes`.
+
+5. **Endpoint de Perfil Dual (`GET /api/v1/analitica/perfil/{id}` en `feature/analitica-perfil-dual`):**
+   * Consultar simultáneamente el documento crudo en MongoDB (`_id = id`) y el registro limpio en MySQL (`id = id`).
+   * Manejar los **3 escenarios obligatorios**: existe en ambas bases (`200 OK` con `vista_mongo` y `vista_sql`), existe solo en una (`200 OK` con la vista disponible, la faltante en `null` y campo `warning`), o no existe en ninguna (`404 Not Found`).
 
 ---
 
@@ -119,12 +125,12 @@ Para cumplir con las reglas de ingeniería colaborativa del proyecto, **no se pe
 
 ---
 
-### Integrante 3: Motor de Analítica Dinámica y Auditoría Dual (Endpoints Analíticos)
+### Integrante 3: Motor de Analítica Estadística Dinámica
 
-* **Ramas sugeridas:** `feature/analitica-columna`, `feature/analitica-perfil-dual`
+* **Ramas sugeridas:** `feature/analitica-columna`
 * **Archivos asignados:**
   * `app/services/analitica_service.py`
-  * `app/controllers/analitica_controller.py` (endpoints `GET /api/v1/analitica/columna/{nombre}` y `GET /api/v1/analitica/perfil/{id}`)
+  * `app/controllers/analitica_controller.py` (endpoints `GET /api/v1/analitica/columna/{nombre}`)
 
 #### Tareas Técnicas Específicas:
 1. **Análisis Estadístico Dinámico por Columna (`GET /api/v1/analitica/columna/{nombre}`):**
@@ -136,18 +142,12 @@ Para cumplir con las reglas de ingeniería colaborativa del proyecto, **no se pe
      * **Fecha** (`DATE`, `DATETIME`): `min`, `max`, `rango_dias` y `nulos`.
      * **Categórica** (texto con valores repetidos): `valores_unicos`, `distribucion` (frecuencias), `valor_mas_comun` y `nulos`.
      * **Texto libre** (texto donde todos los valores no nulos son únicos): `valores_unicos` y `nulos`.
-2. **Auditoría Cruzada MongoDB + MySQL (`GET /api/v1/analitica/perfil/{id}`):**
-   * Consultar simultáneamente el documento en MongoDB (`_id = id`) y el registro en MySQL (`id = id`).
-   * Manejar los **3 escenarios obligatorios**:
-     * **Existe en ambas bases:** retornar HTTP `200 OK` con `id`, `vista_mongo` y `vista_sql`.
-     * **Existe solo en una base:** retornar HTTP `200 OK` con la vista disponible, la faltante en `null` y un campo `warning` explicando la inconsistencia de sincronización.
-     * **No existe en ninguna base:** retornar HTTP `404 Not Found`.
 
 ---
 
 ## 5. Registro Técnico de Implementación por Integrante
 
-### Alexander: Núcleo de Infraestructura, Modelado de Datos y Extracción (Fase E)
+### Alexander: Núcleo de Infraestructura, Modelado SQL, Extracción (Fase E) y Perfil Dual
 
 #### 1. Esquema Relacional Definitivo del Data Warehouse (`artworks_master`)
 
@@ -250,12 +250,26 @@ Componentes implementados y verificados para habilitar el desarrollo en paralelo
   * Valida automáticamente el cuerpo de entrada con `ExtraerRequest` (`cantidad > 0`, retornando `HTTP 422` ante valores inválidos) y serializa la salida con `ExtraerResponse`.
 
 * **Nota de Coordinación para el Equipo (Entornos Locales):** Dado que MongoDB (`artic_staging`) y MySQL (`artic_dw`) operan en instancias locales independientes en el equipo de cada desarrollador, una vez que el **Integrante 2** integre estos cambios desde `main`, inicie sus servicios locales y configure su `.env`, deberá ejecutar primero `POST /api/v1/etl/extraer` localmente para poblar su colección `artworks_raw` antes de desarrollar y probar `POST /api/v1/etl/transformar`.
+
+#### 5. Implementación de Auditoría Cruzada y Perfil Dual (`feature/analitica-perfil-dual`)
+
+* **Servicio de Auditoría Dual (`app/services/analitica_service.py`):**
+  * **`_sanitizar_documento_mongo(documento)`:** Convierte el documento retornado por PyMongo a diccionario estándar y serializa posibles instancias de `ObjectId` a `str`, manteniendo `_id` como entero (`int`).
+  * **`_serializar_registro_sql(registro)`:** Transforma la instancia ORM `ArtworkMaster` en un diccionario con las 11 columnas del Data Warehouse, formateando `fecha_actualizacion_api` a cadena ISO (`YYYY-MM-DD`) cuando no es nula.
+  * **`obtener_perfil_dual(obra_id: int, db: Session)`:** Ejecuta de forma independiente la búsqueda en MongoDB (`artworks_collection.find_one({"_id": obra_id})`) y en MySQL (`db.query(ArtworkMaster).filter(ArtworkMaster.id == obra_id).first()`), capturando fallos de conexión (`PyMongoError` / `SQLAlchemyError`) con `HTTP 500`. Implementa los 3 escenarios exigidos:
+    1. **Ausente en ambas bases:** lanza `HTTP 404 Not Found`.
+    2. **Presente solo en una base:** retorna `HTTP 200 OK` con la vista existente, la faltante en `None` (`null` en JSON) y el atributo `warning` detallando la inconsistencia de sincronización.
+    3. **Presente en ambas bases:** retorna `HTTP 200 OK` con `id`, `vista_mongo`, `vista_sql` y `warning: null`.
+
+* **Controlador REST (`app/controllers/analitica_controller.py`):**
+  * Expone `GET /api/v1/analitica/perfil/{id}` validando el parámetro entero `id` en la ruta, inyectando la sesión transaccional de MySQL mediante `Depends(get_db)` y serializando la respuesta con `PerfilDualResponse`.
+
 ### Integrante 2: Transformación Pandas, Carga Data Warehouse y Reset (Fases T, L y Reset)
 
 *(Espacio reservado para documentar la implementación de `/transformar` y `/reset` siguiendo la misma numeración interna `1, 2, 3...`).*
 
 ---
 
-### Integrante 3: Motor de Analítica Dinámica y Auditoría Dual (Endpoints Analíticos)
+### Integrante 3: Motor de Analítica Estadística Dinámica
 
-*(Espacio reservado para documentar la implementación de `/columna/{nombre}` y `/perfil/{id}` siguiendo la misma numeración interna `1, 2, 3...`).*
+*(Espacio reservado para documentar la implementación de /columna/{nombre} siguiendo la misma numeración interna 1, 2, 3...)*.
