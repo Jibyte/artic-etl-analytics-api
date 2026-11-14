@@ -1,0 +1,8 @@
+fastapi
+uvicorn
+pandas
+pymongo
+sqlalchemy
+pymysql
+requests
+python-dotenv

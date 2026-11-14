@@ -7,7 +7,7 @@
 ### Stack Tecnológico
 * **Framework Web / API REST:** FastAPI + Uvicorn
 * **Base de Datos Staging (NoSQL):** MongoDB (`pymongo`)
-* **Data Warehouse (SQL):** MySQL (`sqlalchemy` + `mysql-connector-python`)
+* **Data Warehouse (SQL):** MySQL (`sqlalchemy` + `pymysql`)
 * **Procesamiento y Perfilado de Datos:** Pandas
 * **Validación de Contratos:** Pydantic
 * **Gestión de Configuración:** `python-dotenv`
@@ -142,3 +142,101 @@ Para cumplir con las reglas de ingeniería colaborativa del proyecto, **no se pe
      * **Existe en ambas bases:** retornar HTTP `200 OK` con `id`, `vista_mongo` y `vista_sql`.
      * **Existe solo en una base:** retornar HTTP `200 OK` con la vista disponible, la faltante en `null` y un campo `warning` explicando la inconsistencia de sincronización.
      * **No existe en ninguna base:** retornar HTTP `404 Not Found`.
+
+---
+
+## 5. Registro Técnico de Implementación por Integrante
+
+### Integrante 1: Núcleo de Infraestructura, Modelado de Datos y Extracción (Fase E)
+
+#### 1. Esquema Relacional Definitivo del Data Warehouse (`artworks_master`)
+
+Definido mediante SQLAlchemy ORM en `app/models/entidad_sql.py` (clase `ArtworkMaster`). La tabla cuenta con **11 columnas tipadas** diseñadas para soportar los 5 perfiles estadísticos dinámicos del endpoint de analítica (`numérica`, `categórica`, `fecha`, `booleana` y `texto libre`):
+
+| Columna | Tipo SQL | Nulabilidad | Origen / Descripción |
+| :--- | :--- | :--- | :--- |
+| `id` | `INT` (PK) | `NOT NULL` | Clave primaria natural (`autoincrement=False`), alineada 1:1 con `_id` en MongoDB y `id` de la API. |
+| `titulo` | `VARCHAR(255)` | `NOT NULL` | Título de la obra (`title`). |
+| `artista` | `VARCHAR(255)` | `NULL` | Nombre del artista principal (`artist_title`). |
+| `departamento` | `VARCHAR(150)` | `NULL` | Departamento curatorial (`department_title`). |
+| `clasificacion` | `VARCHAR(150)` | `NULL` | Clasificación artística (`classification_title`). |
+| `origen` | `VARCHAR(150)` | `NULL` | Lugar de origen de la obra (`place_of_origin`). |
+| `anio_inicio` | `INT` | `NULL` | Año estimado de inicio de creación (`date_start`). |
+| `anio_fin` | `INT` | `NULL` | Año estimado de finalización (`date_end`). |
+| `es_dominio_publico` | `BOOLEAN` | `NULL` | Indicador de dominio público (`is_public_domain`), almacenado como `TINYINT(1)` en MySQL. |
+| `fecha_actualizacion_api` | `DATE` | `NULL` | Fecha de última actualización en la fuente (`source_updated_at`). |
+| `total_categorias` | `INT` | `NULL` | Atributo derivado: longitud del arreglo `category_titles`. |
+
+#### 2. Implementación del Núcleo Base (`feature/core-setup`)
+
+Componentes implementados y verificados para habilitar el desarrollo en paralelo de los tres integrantes:
+
+* **Dependencias (`requirements.txt`):** Declaración de las 8 librerías base (`fastapi`, `uvicorn`, `pandas`, `pymongo`, `sqlalchemy`, `pymysql`, `requests`, `python-dotenv`).
+* **Variables de Entorno (`app/config.py` y `.env.example`):** Centralización de configuraciones en la instancia única `settings` mediante `python-dotenv`, construyendo dinámicamente la propiedad `mysql_url` bajo el dialecto `mysql+pymysql://`.
+* **Capa de Persistencia Dual (`app/database.py`):**
+  * **MongoDB:** Instancia `mongo_client` (con `serverSelectionTimeoutMS=5000`), base de datos `artic_staging` y colección `artworks_raw` lista para importar.
+  * **MySQL:** Motor `engine` con `pool_pre_ping=True`, fábrica de sesiones `SessionLocal`, clase declarativa `Base` y dependencia `get_db()` para inyección transaccional en FastAPI.
+* **Contratos Pydantic (`app/views/schemas.py`):** Esquemas de validación `ExtraerRequest` (con restricción estricta `cantidad > 0`), `ExtraerResponse`, `TransformarResponse`, `ResetResponse` y `PerfilDualResponse` (con campos `vista_mongo`, `vista_sql` y `warning` opcionales).
+* **Aplicación y Enrutadores (`app/main.py` y `controllers/`):** Inicialización de `FastAPI` con gestor de ciclo de vida `lifespan` que ejecuta `Base.metadata.create_all(bind=engine)` al arrancar, routers base montados bajo `/api/v1/etl` y `/api/v1/analitica`, y endpoint de verificación `GET /`.
+
+#### 3. Decisiones Técnicas, Guía Multiplataforma (Linux / Windows) y Troubleshooting
+
+* **Creación Autónoma de la Base de Datos en MySQL (`app/database.py`):**
+  Antes de crear el motor definitivo hacia `artic_dw`, `app/database.py` ejecuta `ensure_mysql_database()`, conectándose temporalmente al servidor MySQL y lanzando:
+
+  ```sql
+  CREATE DATABASE IF NOT EXISTS `artic_dw` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+  ```
+
+  De este modo, ningún integrante necesita crear manualmente el esquema en DBeaver antes de iniciar la API, asegurando además compatibilidad total con caracteres especiales (`utf8mb4`).
+
+* **Sustitución de `mysql-connector-python` por `pymysql`:**
+  * **Incidencia:** En entornos con **Python 3.14**, `mysql-connector-python` falla al importarse con `AttributeError: module 'ssl' has no attribute 'PROTOCOL_TLSv1'`, debido a que Python 3.14 eliminó protocolos TLS 1.0 obsoletos aún referenciados internamente por dicho driver.
+  * **Solución:** Se adoptó `pymysql` en `requirements.txt` y en las cadenas de conexión de `app/config.py` y `app/database.py` (`mysql+pymysql://`), garantizando compatibilidad entre versiones recientes de Python tanto en Linux como en Windows.
+
+* **Guía de Puesta en Marcha para el Equipo (Linux y Windows):**
+  1. **Crear y activar el entorno virtual:**
+     * **Linux / macOS:**
+       ```bash
+       python3 -m venv .venv
+       source .venv/bin/activate
+       ```
+     * **Windows (PowerShell):**
+       ```powershell
+       python -m venv .venv
+       .\.venv\Scripts\Activate.ps1
+       ```
+     * **Windows (CMD):**
+       ```cmd
+       python -m venv .venv
+       .\.venv\Scripts\activate.bat
+       ```
+  2. **Instalar dependencias y configurar credenciales:**
+     ```bash
+     pip install -r requirements.txt
+     ```
+     Crear un archivo `.env` en la raíz copiando la estructura de `.env.example` y colocando la contraseña local de MySQL (`MYSQL_PASSWORD`).
+  3. **Verificar que los servicios locales de MySQL y MongoDB estén activos:**
+     * **Linux:**
+       ```bash
+       sudo systemctl start mysql mongod
+       sudo systemctl is-active mysql mongod
+       ```
+     * **Windows:** Abrir la aplicación **Servicios** (`Win + R` → escribir `services.msc`) y confirmar que los servicios **MySQL** (ej. `MySQL80`) y **MongoDB Server** (`MongoDB`) estén en estado *En ejecución* (o iniciarlos desde PowerShell/CMD como Administrador con `net start MySQL80` y `net start MongoDB`).
+  4. **Ejecutar el servidor de desarrollo FastAPI:**
+     ```bash
+     uvicorn app.main:app --reload
+     ```
+     Documentación interactiva disponible en `http://127.0.0.1:8000/docs`.
+
+---
+
+### Integrante 2: Transformación Pandas, Carga Data Warehouse y Reset (Fases T, L y Reset)
+
+*(Espacio reservado para documentar la implementación de `/transformar` y `/reset` siguiendo la misma numeración interna `1, 2, 3...`).*
+
+---
+
+### Integrante 3: Motor de Analítica Dinámica y Auditoría Dual (Endpoints Analíticos)
+
+*(Espacio reservado para documentar la implementación de `/columna/{nombre}` y `/perfil/{id}` siguiendo la misma numeración interna `1, 2, 3...`).*
