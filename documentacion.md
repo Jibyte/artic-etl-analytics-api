@@ -63,7 +63,7 @@ Para cumplir con las reglas de ingeniería colaborativa del proyecto, **no se pe
 
 ---
 
-### Integrante 1: Núcleo de Infraestructura, Modelado de Datos y Extracción (Fase E)
+### Alexander: Núcleo de Infraestructura, Modelado de Datos y Extracción (Fase E)
 
 * **Ramas sugeridas:** `feature/core-setup`, `feature/models-schemas`, `feature/etl-extract`
 * **Archivos asignados:**
@@ -147,7 +147,7 @@ Para cumplir con las reglas de ingeniería colaborativa del proyecto, **no se pe
 
 ## 5. Registro Técnico de Implementación por Integrante
 
-### Integrante 1: Núcleo de Infraestructura, Modelado de Datos y Extracción (Fase E)
+### Alexander: Núcleo de Infraestructura, Modelado de Datos y Extracción (Fase E)
 
 #### 1. Esquema Relacional Definitivo del Data Warehouse (`artworks_master`)
 
@@ -231,6 +231,25 @@ Componentes implementados y verificados para habilitar el desarrollo en paralelo
 
 ---
 
+#### 4. Implementación de la Fase de Extracción (`feature/etl-extract`)
+
+* **Servicio de Consumo Paginado e Ingesta Idempotente (`app/services/etl_service.py`):**
+  * **`obtener_obras_api(cantidad: int)`:** Consulta `https://api.artic.edu/api/v1/artworks` gestionando paginación dinámica (`page` y `limit`, acotado a un máximo de `100` registros por petición mediante `min(100, restantes)`). Incluye encabezado `User-Agent` identificativo, control de corte seguro ante fin de páginas (`total_pages` o respuesta vacía) y captura de fallos de red o disponibilidad externa (`requests.RequestException`) respondiendo `HTTP 502 Bad Gateway`.
+  * **`extraer_y_guardar_obras(cantidad: int)`:** Asigna explícitamente el identificador entero nativo de cada obra (`id`) como clave primaria documental `_id` en MongoDB (evitando el `ObjectId` autogenerado para garantizar cruce 1:1 con MySQL). Ejecuta escrituras atómicas idempotentes mediante:
+    ```python
+    artworks_collection.update_one(
+        {"_id": documento["_id"]},
+        {"$set": documento},
+        upsert=True
+    )
+    ```
+    Contabiliza `nuevos` (cuando `upserted_id is not None`) frente a `ya_existentes` en ejecuciones repetidas, y captura errores de persistencia (`PyMongoError`) devolviendo `HTTP 500`.
+
+* **Controlador REST (`app/controllers/etl_controller.py`):**
+  * Expone `POST /api/v1/etl/extraer` con código de respuesta `HTTP 201 Created`.
+  * Valida automáticamente el cuerpo de entrada con `ExtraerRequest` (`cantidad > 0`, retornando `HTTP 422` ante valores inválidos) y serializa la salida con `ExtraerResponse`.
+
+* **Nota de Coordinación para el Equipo (Entornos Locales):** Dado que MongoDB (`artic_staging`) y MySQL (`artic_dw`) operan en instancias locales independientes en el equipo de cada desarrollador, una vez que el **Integrante 2** integre estos cambios desde `main`, inicie sus servicios locales y configure su `.env`, deberá ejecutar primero `POST /api/v1/etl/extraer` localmente para poblar su colección `artworks_raw` antes de desarrollar y probar `POST /api/v1/etl/transformar`.
 ### Integrante 2: Transformación Pandas, Carga Data Warehouse y Reset (Fases T, L y Reset)
 
 *(Espacio reservado para documentar la implementación de `/transformar` y `/reset` siguiendo la misma numeración interna `1, 2, 3...`).*
