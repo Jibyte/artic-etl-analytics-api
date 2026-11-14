@@ -3,6 +3,6 @@ uvicorn
 pandas
 pymongo
 sqlalchemy
-mysql-connector-python
+pymysql
 requests
 python-dotenv
