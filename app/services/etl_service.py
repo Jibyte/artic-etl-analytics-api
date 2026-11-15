@@ -8,6 +8,7 @@ from app.database import artworks_collection
 from sqlalchemy.exc import SQLAlchemyError
 from app.models.entidad_sql import ArtworkMaster
 from sqlalchemy import text
+from sqlalchemy.dialects.mysql import insert
 
 def obtener_obras_api(cantidad: int) -> List[Dict[str, Any]]:
     obras_recolectadas: List[Dict[str, Any]] = []
@@ -161,24 +162,46 @@ def transformar_y_cargar_obras(db):
                 )
             )
 
-        # Consultamos las PK existentes para evitar duplicados.
+         # Convertimos los registros del modelo en diccionarios
+        datos = [
+            {
+                columna.name: getattr(registro, columna.name)
+                for columna in ArtworkMaster.__table__.columns
+            }
+            for registro in registros
+        ]
+
+        # Identificamos cuáles registros todavía no existen
         ids_existentes = {
             resultado[0]
             for resultado in db.query(ArtworkMaster.id).all()
         }
 
-        registros_nuevos = [
-            registro for registro in registros
+        registros_nuevos = sum(
+            1 for registro in registros
             if registro.id not in ids_existentes
-        ]
+        )
 
-        if registros_nuevos:
-            db.add_all(registros_nuevos)
+        # Insertamos las obras nuevas y actualizamos las existentes
+        if datos:
+            consulta = insert(ArtworkMaster).values(datos)
+
+            columnas_actualizables = {
+                columna.name: consulta.inserted[columna.name]
+                for columna in ArtworkMaster.__table__.columns
+                if columna.name != "id"
+            }
+
+            consulta = consulta.on_duplicate_key_update(
+                **columnas_actualizables
+            )
+
+            db.execute(consulta)
             db.commit()
 
         return {
             "mensaje": "Pipeline finalizado",
-            "registros_procesados": len(registros_nuevos),
+            "registros_procesados": registros_nuevos,
             "tabla_destino": "artworks_master",
             "status": 200
         }
