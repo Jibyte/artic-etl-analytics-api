@@ -99,9 +99,9 @@ Para cumplir con las reglas de ingeniería colaborativa del proyecto, **no se pe
 
 ---
 
-### Integrante 2: Transformación Pandas, Carga Data Warehouse y Reset (Fases T, L y Reset)
+### Salomé: Transformación Pandas, Carga Data Warehouse y Reset (Fases T, L y Reset)
 
-* **Ramas sugeridas:** `feature/etl-transform-load`, `feature/etl-reset`
+* **Ramas sugeridas:** `feature/etl-transform-load`, `feature/etl-reset-truncate`
 * **Archivos asignados:**
   * `app/services/etl_service.py` (funciones de transformación, carga y reset)
   * `app/controllers/etl_controller.py` (endpoints `POST /api/v1/etl/transformar` y `DELETE /api/v1/etl/reset`)
@@ -264,10 +264,88 @@ Componentes implementados y verificados para habilitar el desarrollo en paralelo
 * **Controlador REST (`app/controllers/analitica_controller.py`):**
   * Expone `GET /api/v1/analitica/perfil/{id}` validando el parámetro entero `id` en la ruta, inyectando la sesión transaccional de MySQL mediante `Depends(get_db)` y serializando la respuesta con `PerfilDualResponse`.
 
-### Integrante 2: Transformación Pandas, Carga Data Warehouse y Reset (Fases T, L y Reset)
+### Salomé: Transformación Pandas, Carga Data Warehouse y Reset (Fases T, L y Reset)
 
-*(Espacio reservado para documentar la implementación de `/transformar` y `/reset` siguiendo la misma numeración interna `1, 2, 3...`).*
+#### 1. Implementación de Transformación y Carga (`feature/etl-transform-load`)
 
+**Endpoint:** `POST /api/v1/etl/transformar`
+
+**Objetivo:** transformar los documentos crudos almacenados en MongoDB y cargarlos en la tabla relacional `artworks_master` de MySQL.
+
+**Servicio de transformación (`app/services/etl_service.py`):**
+
+- **Lectura de datos:** se recuperan los documentos de la colección `artworks_raw` mediante `artworks_collection.find({})`.
+- **Transformación con Pandas:** se utiliza `pd.json_normalize()` para aplanar los documentos JSON.
+- **Selección de atributos:** se mapean los campos necesarios al modelo `ArtworkMaster`, descartando los metadatos que no forman parte de la tabla SQL.
+- **Limpieza de valores nulos:** los campos de texto vacíos se reemplazan por `"N/A"`; los valores numéricos y las fechas inválidas se conservan como `None`.
+- **Conversión de tipos:** se normalizan fechas, enteros y valores booleanos antes de la carga.
+- **Identificación:** se conserva el identificador `_id` de MongoDB como clave primaria `id` en MySQL.
+
+**Carga idempotente en MySQL:**
+
+Se utiliza SQLAlchemy con el dialecto MySQL y la instrucción `ON DUPLICATE KEY UPDATE`, que permite insertar registros nuevos y actualizar los existentes sin generar duplicados.
+
+La tabla `artworks_master` se crea automáticamente al iniciar la aplicación mediante `Base.metadata.create_all(bind=engine)` si todavía no existe.
+
+**Respuesta HTTP 200:**
+
+```json
+{
+  "mensaje": "Pipeline finalizado",
+  "registros_procesados": 50,
+  "tabla_destino": "artworks_master",
+  "status": 200
+}
+```
+
+El campo `registros_procesados` representa la cantidad de registros nuevos insertados.
+
+#### 2. Implementación del Reset (`feature/etl-reset-truncate`)
+
+**Endpoint:** `DELETE /api/v1/etl/reset`
+
+**Objetivo:** eliminar los datos del pipeline ETL en MongoDB y MySQL, conservando la estructura de la base de datos relacional.
+
+**Procedimiento:**
+
+1. Se consulta la cantidad de filas existentes en `artworks_master`.
+2. Se ejecuta `TRUNCATE TABLE artworks_master` para vaciar MySQL sin eliminar la tabla ni su clave primaria.
+3. Se utiliza `artworks_collection.delete_many({})` para eliminar los documentos de MongoDB.
+4. Se devuelve un resumen de los registros eliminados.
+
+**Respuesta HTTP 200 obtenida durante las pruebas:**
+
+```json
+{
+  "mensaje": "Sistema reseteado correctamente",
+  "mongo_docs_eliminados": 10,
+  "mysql_rows_eliminadas": 10,
+  "status": 200
+}
+```
+
+**Consideración técnica:** `TRUNCATE` realiza un commit implícito en MySQL. Por lo tanto, no puede revertirse mediante `rollback()` y la limpieza de MongoDB y MySQL no constituye una transacción atómica entre ambas bases.
+
+#### 3. Pruebas y Validaciones
+
+| Prueba | Resultado |
+|---|---|
+| Transformación de 50 documentos | Exitosa |
+| Segunda ejecución sin insertar duplicados | Exitosa |
+| Reset de 10 documentos en MongoDB | Exitoso |
+| Reset de 10 filas en MySQL | Exitoso |
+| Conservación de la tabla `artworks_master` | Verificada en DBeaver |
+| Conservación de la clave primaria `id` | Verificada en DBeaver |
+| Actualización de datos existentes mediante upsert | Pendiente de prueba específica |
+
+**Herramientas utilizadas:** Swagger UI, MongoDB, MySQL y DBeaver.
+
+#### 4. Archivos Modificados
+
+- `app/services/etl_service.py`: implementación de las funciones `transformar_y_cargar_obras()` y `reset_pipeline()`.
+- `app/controllers/etl_controller.py`: exposición de los endpoints REST y uso de la dependencia `get_db()`.
+
+La implementación sigue la arquitectura **MVC + Services**, manteniendo separadas las responsabilidades del controlador, la lógica de transformación y la persistencia de datos.
 ---
 
 ### Integrante 3: Motor de Analítica Estadística Dinámica
