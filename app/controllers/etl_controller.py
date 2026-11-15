@@ -1,4 +1,4 @@
-﻿from fastapi import APIRouter, status, Depends
+from fastapi import APIRouter, status, Depends
 from sqlalchemy.orm import Session
 
 from app.views.schemas import (
@@ -35,4 +35,10 @@ def transformar_datos(db: Session = Depends(get_db)):
     return transformar_y_cargar_obras(db)
 
 
-
+@router.delete(
+    "/reset",
+    response_model=ResetResponse,
+    status_code=status.HTTP_200_OK
+)
+def resetear_pipeline(db: Session = Depends(get_db)):
+    return reset_pipeline(db)
