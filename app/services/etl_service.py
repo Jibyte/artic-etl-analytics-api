@@ -114,7 +114,7 @@ def transformar_y_cargar_obras(db):
                 categorias = []
 
             fecha = pd.to_datetime(
-                fila.get("last_updated"),
+                fila.get("source_updated_at"),
                 errors="coerce",
                 utc=True
             )
