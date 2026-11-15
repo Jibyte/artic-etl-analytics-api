@@ -1,4 +1,4 @@
-﻿from typing import Any, Dict, List
+from typing import Any, Dict, List
 import requests
 import pandas as pd
 from fastapi import HTTPException
@@ -83,7 +83,7 @@ def extraer_y_guardar_obras(cantidad: int) -> Dict[str, Any]:
         )
 
     return {
-        "mensaje": "Datos extraÃ­dos exitosamente",
+        "mensaje": "Datos extraídos exitosamente",
         "nuevos": nuevos,
         "ya_existentes": ya_existentes,
         "fuente": settings.API_SOURCE_NAME,
@@ -210,7 +210,30 @@ def transformar_y_cargar_obras(db):
         db.rollback()
         raise HTTPException(
             status_code=500,
-            detail=f"Error en la transformaciÃ³n y carga: {str(exc)}"
+            detail=f"Error en la transformación y carga: {str(exc)}"
         )
 
+def reset_pipeline(db):
+    try:
+        # Contamos las filas de MySQL antes de vaciar la tabla
+        total_mysql = db.query(ArtworkMaster).count()
 
+        # Vaciamos MySQL conservando la tabla y su clave primaria
+        db.execute(text("TRUNCATE TABLE artworks_master"))
+
+        # Eliminamos todos los documentos de MongoDB
+        resultado_mongo = artworks_collection.delete_many({})
+
+        return {
+            "mensaje": "Sistema reseteado correctamente",
+            "mongo_docs_eliminados": resultado_mongo.deleted_count,
+            "mysql_rows_eliminadas": total_mysql,
+            "status": 200
+        }
+
+    except (PyMongoError, SQLAlchemyError) as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error al resetear el pipeline: {str(exc)}"
+        )
