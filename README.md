@@ -123,7 +123,49 @@ Extrae obras de arte desde la API del Art Institute of Chicago con paginación d
   }
   ```
 
-*(Sección reservada para documentar `POST /api/v1/etl/transformar` y `DELETE /api/v1/etl/reset` — Integrante 2).*
+#### `POST /api/v1/etl/transformar` *(Implementado por: Salomé)*
+
+Transforma los documentos almacenados en MongoDB (`artic_staging.artworks_raw`) mediante **Pandas** y los carga en la tabla `artworks_master` de MySQL.
+
+El proceso incluye aplanamiento de datos JSON, limpieza de valores nulos, conversión de tipos y selección de las columnas del modelo relacional.
+
+La carga es **idempotente**: utiliza `INSERT ... ON DUPLICATE KEY UPDATE` para insertar obras nuevas y actualizar las existentes sin generar duplicados.
+
+* **Request:** no requiere cuerpo JSON.
+* **Response (`200 OK`):**
+
+```json
+{
+  "mensaje": "Pipeline finalizado",
+  "registros_procesados": 50,
+  "tabla_destino": "artworks_master",
+  "status": 200
+}
+```
+
+El campo `registros_procesados` indica la cantidad de registros nuevos insertados durante la ejecución.
+
+#### `DELETE /api/v1/etl/reset` *(Implementado por: Salomé)*
+
+Permite reiniciar el pipeline ETL eliminando los documentos almacenados en MongoDB y vaciando la tabla `artworks_master` de MySQL.
+
+Se utiliza `delete_many({})` para limpiar la colección de MongoDB y `TRUNCATE TABLE artworks_master` para vaciar MySQL, **conservando la tabla y su estructura**.
+
+* **Request:** no requiere cuerpo JSON.
+* **Response (`200 OK`):**
+
+```json
+{
+  "mensaje": "Sistema reseteado correctamente",
+  "mongo_docs_eliminados": 10,
+  "mysql_rows_eliminadas": 10,
+  "status": 200
+}
+```
+
+Los campos `mongo_docs_eliminados` y `mysql_rows_eliminadas` indican cuántos registros fueron eliminados de cada base de datos.
+
+**Nota:** el reset elimina los datos del pipeline, por lo que debe utilizarse únicamente cuando se necesite reiniciar el proceso.
 
 ### Analítica y Auditoría Dual
 
@@ -144,5 +186,6 @@ Consulta simultáneamente una obra de arte por su identificador entero tanto en 
 | Integrante | Rol y Módulo | Ramas Trabajadas | Entregables Principales |
 | :--- | :--- | :--- | :--- |
 | **Alexander** | **Infraestructura Base, Modelado SQL, Extracción (E) y Perfil Dual** | `feature/core-setup`<br>`feature/etl-extract`<br>`feature/analitica-perfil-dual` | Configuración `.env`, conexiones duales MongoDB/MySQL, modelo `ArtworkMaster` (11 columnas), esquemas Pydantic, `main.py`, extracción idempotente `POST /api/v1/etl/extraer` y auditoría cruzada `GET /api/v1/analitica/perfil/{id}`. |
-| **Integrante 2** | **Transformación Pandas, Carga DW (TL) y Reset** | *Por registrar* | Limpieza y aplanamiento con Pandas, carga idempotente en MySQL (`POST /api/v1/etl/transformar`) y vaciado controlado (`DELETE /api/v1/etl/reset`). |
+| **Salomé** | **Transformación Pandas, Carga DW (TL) y Reset** | *Por registrar* | Limpieza y aplanamiento con Pandas, carga idempotente en MySQL (`POST /api/v1/etl/transformar`) y vaciado controlado (`DELETE /api/v1/etl/reset`). |
+
 | **Integrante 3** | **Analítica Estadística Dinámica** | *Por registrar* | Perfilado estadístico dinámico por tipo de columna (`GET /api/v1/analitica/columna/{nombre}`) sin hardcodear nombres de columnas. |
