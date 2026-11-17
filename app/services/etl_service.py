@@ -106,6 +106,7 @@ def transformar_y_cargar_obras(db):
         df = pd.json_normalize(documentos, sep="_")
 
         registros = []
+        ids_procesados = set()
 
         for _, fila in df.iterrows():
             categorias = fila.get("category_titles", [])
@@ -149,6 +150,12 @@ def transformar_y_cargar_obras(db):
 
             except (ValueError, TypeError, KeyError):
                 continue
+
+            # Evitamos procesar obras con identificadores repetidos
+            if obra_id in ids_procesados:
+                continue
+
+            ids_procesados.add(obra_id)
 
             registros.append(
                 ArtworkMaster(
