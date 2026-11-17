@@ -106,6 +106,7 @@ def transformar_y_cargar_obras(db):
         df = pd.json_normalize(documentos, sep="_")
 
         registros = []
+        ids_procesados = set()
 
         for _, fila in df.iterrows():
             categorias = fila.get("category_titles", [])
@@ -138,9 +139,28 @@ def transformar_y_cargar_obras(db):
                 valor = pd.to_numeric(
                     fila.get(columna), errors="coerce"
                 )
-                return int(valor) if pd.notna(valor) else None
+                # Evitamos convertir valores nulos o infinitos
+                if pd.isna(valor) or not pd.api.types.is_number(valor):
+                    return None
 
-            obra_id = int(fila["_id"])
+                if valor == float("inf") or valor == float("-inf"):
+                    return None
+                return int(valor)
+            # Validamos que la obra tenga un identificador numérico válido
+            try:
+                obra_id = int(fila["_id"])
+
+                if obra_id <= 0:
+                    continue
+
+            except (ValueError, TypeError, KeyError):
+                continue
+
+            # Evitamos procesar obras con identificadores repetidos
+            if obra_id in ids_procesados:
+                continue
+
+            ids_procesados.add(obra_id)
 
             registros.append(
                 ArtworkMaster(
@@ -153,7 +173,7 @@ def transformar_y_cargar_obras(db):
                     anio_inicio=numero("date_start"),
                     anio_fin=numero("date_end"),
                     es_dominio_publico=(
-                        bool(fila["is_public_domain"])
+                        bool(fila.get("is_public_domain"))
                         if pd.notna(fila.get("is_public_domain"))
                         else None
                     ),
@@ -161,8 +181,15 @@ def transformar_y_cargar_obras(db):
                     total_categorias=len(categorias)
                 )
             )
-
-         # Convertimos los registros del modelo en diccionarios
+        # Finalizamos si ninguna obra tiene un identificador válido
+        if not registros:
+            return {
+                "mensaje": "No hay obras válidas para cargar",
+                "registros_procesados": 0,
+                "tabla_destino": "artworks_master",
+                "status": 200
+            }
+        # Convertimos los registros del modelo en diccionarios
         datos = [
             {
                 columna.name: getattr(registro, columna.name)
