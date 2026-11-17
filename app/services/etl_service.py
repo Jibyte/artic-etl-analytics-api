@@ -176,7 +176,14 @@ def transformar_y_cargar_obras(db):
                     total_categorias=len(categorias)
                 )
             )
-
+        # Finalizamos si ninguna obra tiene un identificador válido
+        if not registros:
+            return {
+                "mensaje": "No hay obras válidas para cargar",
+                "registros_procesados": 0,
+                "tabla_destino": "artworks_master",
+                "status": 200
+            }
          # Convertimos los registros del modelo en diccionarios
         datos = [
             {
