@@ -168,7 +168,7 @@ def transformar_y_cargar_obras(db):
                     anio_inicio=numero("date_start"),
                     anio_fin=numero("date_end"),
                     es_dominio_publico=(
-                        bool(fila["is_public_domain"])
+                        bool(fila.get("is_public_domain"))
                         if pd.notna(fila.get("is_public_domain"))
                         else None
                     ),
