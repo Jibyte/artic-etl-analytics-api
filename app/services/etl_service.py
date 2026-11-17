@@ -140,7 +140,15 @@ def transformar_y_cargar_obras(db):
                 )
                 return int(valor) if pd.notna(valor) else None
 
-            obra_id = int(fila["_id"])
+            # Validamos que la obra tenga un identificador numérico válido
+            try:
+                obra_id = int(fila["_id"])
+
+                if obra_id <= 0:
+                    continue
+
+            except (ValueError, TypeError, KeyError):
+                continue
 
             registros.append(
                 ArtworkMaster(
