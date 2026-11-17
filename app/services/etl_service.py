@@ -139,8 +139,13 @@ def transformar_y_cargar_obras(db):
                 valor = pd.to_numeric(
                     fila.get(columna), errors="coerce"
                 )
-                return int(valor) if pd.notna(valor) else None
+                # Evitamos convertir valores nulos o infinitos
+                if pd.isna(valor) or not pd.api.types.is_number(valor):
+                    return None
 
+                if valor == float("inf") or valor == float("-inf"):
+                    return None
+                return int(valor)
             # Validamos que la obra tenga un identificador numérico válido
             try:
                 obra_id = int(fila["_id"])
@@ -184,7 +189,7 @@ def transformar_y_cargar_obras(db):
                 "tabla_destino": "artworks_master",
                 "status": 200
             }
-         # Convertimos los registros del modelo en diccionarios
+        # Convertimos los registros del modelo en diccionarios
         datos = [
             {
                 columna.name: getattr(registro, columna.name)
