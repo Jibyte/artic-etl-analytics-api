@@ -15,7 +15,15 @@ def consultar_perfil_dual(id: int, db: Session = Depends(get_db)):
 
 @router.get(
     "/columna/{nombre}",
-    response_model=AnaliticaColumnaResponse
+    response_model=AnaliticaColumnaResponse,
+    summary="Análisis estadístico dinámico por columna",
+    description=(
+        "Detecta dinámicamente el tipo de dato de una columna de artworks_master "
+        "(numérica, booleana, fecha, categórica o texto libre) y retorna sus métricas."
+    ),
+    responses={
+        400: {"description": "La columna solicitada no existe en la tabla artworks_master"}
+    },
 )
 def consultar_analitica_columna(nombre: str, db: Session = Depends(get_db)):
     return analizar_columna(nombre, db)

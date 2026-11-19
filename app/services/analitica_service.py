@@ -160,7 +160,9 @@ def _detectar_tipo_columna(columna_sql: Any, serie_valida: pd.Series) -> str:
 
 
 def _analizar_numerica(nombre: str, serie_valida: pd.Series, nulos: int) -> Dict[str, Any]:
-    if len(serie_valida) == 0:
+    valores_num = pd.to_numeric(serie_valida, errors="coerce").dropna()
+
+    if len(valores_num) == 0:
         return {
             "columna": nombre,
             "tipo": "numerica",
@@ -172,7 +174,6 @@ def _analizar_numerica(nombre: str, serie_valida: pd.Series, nulos: int) -> Dict
             "nulos": nulos,
         }
 
-    valores_num = pd.to_numeric(serie_valida, errors="coerce").dropna()
     desviacion = round(float(valores_num.std()), 2) if len(valores_num) > 1 else 0.0
 
     return {
@@ -254,6 +255,7 @@ def _analizar_texto(nombre: str, serie_valida: pd.Series, nulos: int) -> Dict[st
 
 
 def analizar_columna(nombre: str, db: Session) -> Dict[str, Any]:
+    nombre = nombre.strip()
     columnas_tabla = ArtworkMaster.__table__.columns
     columnas_validas: List[str] = list(columnas_tabla.keys())
 
