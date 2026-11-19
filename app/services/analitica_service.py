@@ -90,8 +90,78 @@ def obtener_perfil_dual(obra_id: int, db: Session) -> Dict[str, Any]:
         "warning": warning,
     }
 
+def _detectar_tipo_columna(columna_sql: Any, serie_valida: pd.Series) -> str:
+    tipo_sql = columna_sql.type
+
+    # 1. Booleana (BOOLEAN explícito en SQLAlchemy o TINYINT(1) con valores 0 y 1)
+    if isinstance(tipo_sql, Boolean):
+        return "booleana"
+
+    if isinstance(tipo_sql, (Integer, Float, Numeric)):
+        if len(serie_valida) > 0 and set(serie_valida.tolist()).issubset({0, 1, True, False}):
+            return "booleana"
+        return "numerica"
+
+    # 2. Fecha (DATE o DATETIME)
+    if isinstance(tipo_sql, (Date, DateTime)):
+        return "fecha"
+
+    # 3. Texto: categórica (valores repetidos) vs texto libre (todos distintos)
+    textos = serie_valida.astype(str)
+    if len(textos) == 0 or textos.nunique() == len(textos):
+        return "texto"
+    return "categorica"
+
+
+def _detectar_tipo_columna(columna_sql: Any, serie_valida: pd.Series) -> str:
+    tipo_sql = columna_sql.type
+
+    # 1. Booleana (BOOLEAN explícito en SQLAlchemy o TINYINT(1) con valores 0 y 1)
+    if isinstance(tipo_sql, Boolean):
+        return "booleana"
+
+    if isinstance(tipo_sql, (Integer, Float, Numeric)):
+        if len(serie_valida) > 0 and set(serie_valida.tolist()).issubset({0, 1, True, False}):
+            return "booleana"
+        return "numerica"
+
+    # 2. Fecha (DATE o DATETIME)
+    if isinstance(tipo_sql, (Date, DateTime)):
+        return "fecha"
+
+    # 3. Texto: categórica (valores repetidos) vs texto libre (todos distintos)
+    textos = serie_valida.astype(str)
+    if len(textos) == 0 or textos.nunique() == len(textos):
+        return "texto"
+    return "categorica"
+
+
+def _detectar_tipo_columna(columna_sql: Any, serie_valida: pd.Series) -> str:
+    tipo_sql = columna_sql.type
+
+    # 1. Booleana (BOOLEAN explícito en SQLAlchemy o TINYINT(1) con valores 0 y 1)
+    if isinstance(tipo_sql, Boolean):
+        return "booleana"
+
+    if isinstance(tipo_sql, (Integer, Float, Numeric)):
+        if len(serie_valida) > 0 and set(serie_valida.tolist()).issubset({0, 1, True, False}):
+            return "booleana"
+        return "numerica"
+
+    # 2. Fecha (DATE o DATETIME)
+    if isinstance(tipo_sql, (Date, DateTime)):
+        return "fecha"
+
+    # 3. Texto: categórica (valores repetidos) vs texto libre (todos distintos)
+    textos = serie_valida.astype(str)
+    if len(textos) == 0 or textos.nunique() == len(textos):
+        return "texto"
+    return "categorica"
+
+
 def analizar_columna(nombre: str, db: Session) -> Dict[str, Any]:
-    columnas_validas: List[str] = list(ArtworkMaster.__table__.columns.keys())
+    columnas_tabla = ArtworkMaster.__table__.columns
+    columnas_validas: List[str] = list(columnas_tabla.keys())
 
     if nombre not in columnas_validas:
         raise HTTPException(
@@ -102,9 +172,24 @@ def analizar_columna(nombre: str, db: Session) -> Dict[str, Any]:
             },
         )
 
+    columna_sql = columnas_tabla[nombre]
+
+    try:
+        filas = db.query(getattr(ArtworkMaster, nombre)).all()
+    except SQLAlchemyError as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error al consultar la columna '{nombre}' en MySQL: {str(exc)}",
+        )
+
+    serie = pd.Series([fila[0] for fila in filas], dtype="object")
+    nulos = int(serie.isna().sum())
+    serie_valida = serie.dropna()
+    tipo_detectado = _detectar_tipo_columna(columna_sql, serie_valida)
+
     return {
         "columna": nombre,
-        "tipo": "texto",
-        "valores_unicos": 0,
-        "nulos": 0,
+        "tipo": tipo_detectado,
+        "valores_unicos": int(serie_valida.nunique()),
+        "nulos": nulos,
     }
