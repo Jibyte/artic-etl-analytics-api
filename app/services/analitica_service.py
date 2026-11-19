@@ -159,6 +159,34 @@ def _detectar_tipo_columna(columna_sql: Any, serie_valida: pd.Series) -> str:
     return "categorica"
 
 
+def _analizar_numerica(nombre: str, serie_valida: pd.Series, nulos: int) -> Dict[str, Any]:
+    if len(serie_valida) == 0:
+        return {
+            "columna": nombre,
+            "tipo": "numerica",
+            "min": None,
+            "max": None,
+            "promedio": None,
+            "mediana": None,
+            "desviacion_std": None,
+            "nulos": nulos,
+        }
+
+    valores_num = pd.to_numeric(serie_valida, errors="coerce").dropna()
+    desviacion = round(float(valores_num.std()), 2) if len(valores_num) > 1 else 0.0
+
+    return {
+        "columna": nombre,
+        "tipo": "numerica",
+        "min": round(float(valores_num.min()), 2),
+        "max": round(float(valores_num.max()), 2),
+        "promedio": round(float(valores_num.mean()), 2),
+        "mediana": round(float(valores_num.median()), 2),
+        "desviacion_std": desviacion,
+        "nulos": nulos,
+    }
+
+
 def analizar_columna(nombre: str, db: Session) -> Dict[str, Any]:
     columnas_tabla = ArtworkMaster.__table__.columns
     columnas_validas: List[str] = list(columnas_tabla.keys())
@@ -186,6 +214,9 @@ def analizar_columna(nombre: str, db: Session) -> Dict[str, Any]:
     nulos = int(serie.isna().sum())
     serie_valida = serie.dropna()
     tipo_detectado = _detectar_tipo_columna(columna_sql, serie_valida)
+
+    if tipo_detectado == "numerica":
+        return _analizar_numerica(nombre, serie_valida, nulos)
 
     return {
         "columna": nombre,
