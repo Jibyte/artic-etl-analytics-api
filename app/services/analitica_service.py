@@ -1,7 +1,9 @@
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
+import pandas as pd
 from bson import ObjectId
 from fastapi import HTTPException
 from pymongo.errors import PyMongoError
+from sqlalchemy import Boolean, Date, DateTime, Float, Integer, Numeric
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 from app.database import artworks_collection
@@ -86,4 +88,23 @@ def obtener_perfil_dual(obra_id: int, db: Session) -> Dict[str, Any]:
         "vista_mongo": vista_mongo,
         "vista_sql": vista_sql,
         "warning": warning,
+    }
+
+def analizar_columna(nombre: str, db: Session) -> Dict[str, Any]:
+    columnas_validas: List[str] = list(ArtworkMaster.__table__.columns.keys())
+
+    if nombre not in columnas_validas:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "mensaje": f"La columna '{nombre}' no existe en la tabla '{ArtworkMaster.__tablename__}'.",
+                "columnas_validas": columnas_validas,
+            },
+        )
+
+    return {
+        "columna": nombre,
+        "tipo": "texto",
+        "valores_unicos": 0,
+        "nulos": 0,
     }
