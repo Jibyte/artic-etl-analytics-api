@@ -169,7 +169,18 @@ Los campos `mongo_docs_eliminados` y `mysql_rows_eliminadas` indican cuántos re
 
 ### Analítica y Auditoría Dual
 
-*(Sección reservada para documentar `GET /api/v1/analitica/columna/{nombre}` — Integrante 3).*
+#### `GET /api/v1/analitica/columna/{nombre}` *(Implementado por: Daniela)*
+Evalúa dinámicamente cualquier columna de la tabla `artworks_master` en MySQL (inspeccionando los metadatos de SQLAlchemy y los valores reales con Pandas, sin nombres de columnas hardcodeados) y retorna sus métricas estadísticas según el tipo detectado (`numerica`, `booleana`, `fecha`, `categorica` o `texto`). Si la columna no existe, responde `400 Bad Request` listando las columnas válidas.
+
+* **Ejemplo de consulta (`GET /api/v1/analitica/columna/es_dominio_publico`):**
+  ```json
+  {
+    "columna": "es_dominio_publico",
+    "tipo": "booleana",
+    "true": 32,
+    "false": 18,
+    "nulos": 0
+  }
 
 #### `GET /api/v1/analitica/perfil/{id}` *(Implementado por: Alexander)*
 Consulta simultáneamente una obra de arte por su identificador entero tanto en MongoDB (`_id`) como en MySQL (`id`) para auditar la sincronización 1:1 del pipeline ETL.
