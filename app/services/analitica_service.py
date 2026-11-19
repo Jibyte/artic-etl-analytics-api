@@ -228,6 +228,31 @@ def _analizar_fecha(nombre: str, serie_valida: pd.Series, nulos: int) -> Dict[st
     }
 
 
+def _analizar_categorica(nombre: str, serie_valida: pd.Series, nulos: int) -> Dict[str, Any]:
+    textos = serie_valida.astype(str)
+    conteos = textos.value_counts()
+    distribucion = {str(categoria): int(cantidad) for categoria, cantidad in conteos.items()}
+    valor_mas_comun = str(conteos.index[0]) if len(conteos) > 0 else None
+
+    return {
+        "columna": nombre,
+        "tipo": "categorica",
+        "valores_unicos": int(textos.nunique()),
+        "distribucion": distribucion,
+        "valor_mas_comun": valor_mas_comun,
+        "nulos": nulos,
+    }
+
+
+def _analizar_texto(nombre: str, serie_valida: pd.Series, nulos: int) -> Dict[str, Any]:
+    return {
+        "columna": nombre,
+        "tipo": "texto",
+        "valores_unicos": int(serie_valida.astype(str).nunique()),
+        "nulos": nulos,
+    }
+
+
 def analizar_columna(nombre: str, db: Session) -> Dict[str, Any]:
     columnas_tabla = ArtworkMaster.__table__.columns
     columnas_validas: List[str] = list(columnas_tabla.keys())
@@ -265,9 +290,7 @@ def analizar_columna(nombre: str, db: Session) -> Dict[str, Any]:
     if tipo_detectado == "fecha":
         return _analizar_fecha(nombre, serie_valida, nulos)
 
-    return {
-        "columna": nombre,
-        "tipo": tipo_detectado,
-        "valores_unicos": int(serie_valida.nunique()),
-        "nulos": nulos,
-    }
+    if tipo_detectado == "categorica":
+        return _analizar_categorica(nombre, serie_valida, nulos)
+
+    return _analizar_texto(nombre, serie_valida, nulos)
