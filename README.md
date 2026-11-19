@@ -197,5 +197,7 @@ Consulta simultáneamente una obra de arte por su identificador entero tanto en 
 | Integrante | Rol y Módulo | Ramas Trabajadas | Entregables Principales |
 | :--- | :--- | :--- | :--- |
 | **Alexander** | **Infraestructura Base, Modelado SQL, Extracción (E) y Perfil Dual** | `feature/core-setup`<br>`feature/etl-extract`<br>`feature/analitica-perfil-dual` | Configuración `.env`, conexiones duales MongoDB/MySQL, modelo `ArtworkMaster` (11 columnas), esquemas Pydantic, `main.py`, extracción idempotente `POST /api/v1/etl/extraer` y auditoría cruzada `GET /api/v1/analitica/perfil/{id}`. |
-| **Salomé** | **Transformación Pandas, Carga DW (TL) y Reset** | *Por registrar* | Limpieza y aplanamiento con Pandas, carga idempotente en MySQL (`POST /api/v1/etl/transformar`) y vaciado controlado (`DELETE /api/v1/etl/reset`). |
+
+| **Salomé** | **Transformación Pandas, Carga DW (TL) y Reset** |  `feature/etl-transform-load`<br>`feature/etl-reset-truncate`<br>`feature/etl-validaciones`<br>`feature/etl-documentacion` | Limpieza y aplanamiento con Pandas, carga idempotente en MySQL (`POST /api/v1/etl/transformar`) y vaciado controlado (`DELETE /api/v1/etl/reset`). |
+
 | **Daniela** | **Analítica Estadística Dinámica** | `feature/analitica-columna` | Perfilado estadístico dinámico por tipo de columna (`GET /api/v1/analitica/columna/{nombre}`) sin hardcodear nombres de columnas. |
