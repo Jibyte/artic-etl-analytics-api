@@ -350,4 +350,27 @@ La implementación sigue la arquitectura **MVC + Services**, manteniendo separad
 
 ### Integrante 3: Motor de Analítica Estadística Dinámica
 
-*(Espacio reservado para documentar la implementación de /columna/{nombre} siguiendo la misma numeración interna 1, 2, 3...)*.
+#### 1. Implementación del Motor de Analítica Dinámica (`feature/analitica-columna`)
+
+* **Endpoint:** `GET /api/v1/analitica/columna/{nombre}`
+* **Controlador (`app/controllers/analitica_controller.py`):** Expone la ruta REST recibiendo el parámetro de ruta `nombre`, inyectando la sesión de MySQL mediante `Depends(get_db)` y serializando la salida con el esquema unión `AnaliticaColumnaResponse`.
+* **Esquemas Pydantic (`app/views/schemas.py`):** Define 5 modelos de respuesta especializados (`ColumnaCategoricaResponse`, `ColumnaNumericaResponse`, `ColumnaFechaResponse`, `ColumnaBooleanaResponse` y `ColumnaTextoResponse`) agrupados en `AnaliticaColumnaResponse`.
+* **Servicio Analítico (`app/services/analitica_service.py`):**
+  * **Validación de entrada (`analizar_columna`):** Inspecciona dinámicamente `ArtworkMaster.__table__.columns` para verificar si `{nombre}` existe en la tabla `artworks_master`. Si no existe, lanza `HTTP 400 Bad Request` retornando la lista de columnas válidas.
+  * **Consulta SQL:** Extrae únicamente la columna solicitada desde MySQL mediante SQLAlchemy (`db.query(getattr(ArtworkMaster, nombre)).all()`), contabilizando valores nulos antes de depurar la serie con Pandas.
+
+#### 2. Detección Dinámica de Tipos y Perfiles Estadísticos
+
+La función `_detectar_tipo_columna()` determina el perfil estadístico inspeccionando los tipos de columna de SQLAlchemy y los valores reales almacenados en MySQL, sin hardcodear nombres de columnas:
+
+1. **Booleana (`_analizar_booleana`):** Detecta columnas `Boolean` o columnas numéricas (`Integer`, `Float`, `Numeric`) cuyos valores no nulos sean subconjunto estricto de `{0, 1}` (representación `TINYINT(1)` en MySQL). Calcula el conteo de `true`, `false` y `nulos`.
+2. **Numérica (`_analizar_numerica`):** Detecta columnas `Integer`, `Float` o `Numeric` con valores continuos o discretos distintos de `{0, 1}`. Calcula `min`, `max`, `promedio`, `mediana`, `desviacion_std` (con manejo seguro si hay menos de 2 registros o todos son nulos) y `nulos`.
+3. **Fecha (`_analizar_fecha`):** Detecta columnas `Date` o `DateTime`, convierte los valores mediante `pd.to_datetime()` y calcula `min`, `max` (en formato `YYYY-MM-DD`), `rango_dias` entre extremos y `nulos`.
+4. **Categórica (`_analizar_categorica`):** Detecta columnas de texto con valores repetidos (`nunique() < len(textos)`). Calcula `valores_unicos`, `distribucion` de frecuencias mediante `value_counts()`, `valor_mas_comun` (moda) y `nulos`.
+5. **Texto libre (`_analizar_texto`):** Detecta columnas de texto donde todos los valores no nulos son únicos (ej. `titulo`) o la columna está vacía, retornando `valores_unicos` y `nulos`.
+
+#### 3. Archivos Modificados y Validaciones
+
+* `app/views/schemas.py`: Creación de los 5 esquemas de salida por tipo de columna y el tipo unión `AnaliticaColumnaResponse`.
+* `app/controllers/analitica_controller.py`: Registro de la ruta `GET /columna/{nombre}` con documentación OpenAPI y respuesta `400`.
+* `app/services/analitica_service.py`: Implementación de `analizar_columna()` y sus funciones auxiliares de detección y perfilado dinámico.
