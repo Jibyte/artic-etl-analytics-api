@@ -187,6 +187,20 @@ def _analizar_numerica(nombre: str, serie_valida: pd.Series, nulos: int) -> Dict
     }
 
 
+def _analizar_booleana(nombre: str, serie_valida: pd.Series, nulos: int) -> Dict[str, Any]:
+    valores_bool = serie_valida.map(lambda x: bool(x))
+    conteo_true = int(valores_bool.sum())
+    conteo_false = int((~valores_bool).sum())
+
+    return {
+        "columna": nombre,
+        "tipo": "booleana",
+        "true": conteo_true,
+        "false": conteo_false,
+        "nulos": nulos,
+    }
+
+
 def analizar_columna(nombre: str, db: Session) -> Dict[str, Any]:
     columnas_tabla = ArtworkMaster.__table__.columns
     columnas_validas: List[str] = list(columnas_tabla.keys())
@@ -217,6 +231,9 @@ def analizar_columna(nombre: str, db: Session) -> Dict[str, Any]:
 
     if tipo_detectado == "numerica":
         return _analizar_numerica(nombre, serie_valida, nulos)
+
+    if tipo_detectado == "booleana":
+        return _analizar_booleana(nombre, serie_valida, nulos)
 
     return {
         "columna": nombre,
