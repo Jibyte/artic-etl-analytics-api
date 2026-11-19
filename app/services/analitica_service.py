@@ -201,6 +201,33 @@ def _analizar_booleana(nombre: str, serie_valida: pd.Series, nulos: int) -> Dict
     }
 
 
+def _analizar_fecha(nombre: str, serie_valida: pd.Series, nulos: int) -> Dict[str, Any]:
+    fechas = pd.to_datetime(serie_valida, errors="coerce").dropna()
+
+    if len(fechas) == 0:
+        return {
+            "columna": nombre,
+            "tipo": "fecha",
+            "min": None,
+            "max": None,
+            "rango_dias": 0,
+            "nulos": nulos,
+        }
+
+    fecha_min = fechas.min()
+    fecha_max = fechas.max()
+    rango_dias = int((fecha_max - fecha_min).days)
+
+    return {
+        "columna": nombre,
+        "tipo": "fecha",
+        "min": fecha_min.strftime("%Y-%m-%d"),
+        "max": fecha_max.strftime("%Y-%m-%d"),
+        "rango_dias": rango_dias,
+        "nulos": nulos,
+    }
+
+
 def analizar_columna(nombre: str, db: Session) -> Dict[str, Any]:
     columnas_tabla = ArtworkMaster.__table__.columns
     columnas_validas: List[str] = list(columnas_tabla.keys())
@@ -234,6 +261,9 @@ def analizar_columna(nombre: str, db: Session) -> Dict[str, Any]:
 
     if tipo_detectado == "booleana":
         return _analizar_booleana(nombre, serie_valida, nulos)
+
+    if tipo_detectado == "fecha":
+        return _analizar_fecha(nombre, serie_valida, nulos)
 
     return {
         "columna": nombre,
